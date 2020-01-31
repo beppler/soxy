@@ -14,7 +14,7 @@ import (
 // Start starts the http server
 func Start(c *cli.Context) error {
 	port := c.String("port")
-	http.Handle("/", socketHandler{apiKey: c.String("api-key")})
+	http.Handle("/", &socketHandler{apiKey: c.String("api-key")})
 	err := http.ListenAndServe(port, nil)
 	log.Errorf("HTTP SERVER: %v", err.Error())
 	return err
@@ -30,12 +30,13 @@ type socketHandler struct {
 	apiKey string
 }
 
-func (h socketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *socketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.apiKey != "" {
-		if h.apiKey != r.Header.Get("X-Api-Key") {
+		apiKey := r.Header.Get("X-Api-Key")
+		if h.apiKey != apiKey {
 			w.WriteHeader(http.StatusForbidden)
 			w.Write([]byte("Forbidden"))
-			log.Errorf("HTTP SERVER: %v", "Invalid API Key")
+			log.Errorf("HTTP SERVER: Invalid API Key '%v'", apiKey)
 			return
 		}
 	}
@@ -46,7 +47,7 @@ func (h socketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	remote := q.Get("remote")
 	if remote == "" {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("remote not set"))
 		log.Errorf("HTTP SERVER: %v", "remote not set")
 		return
@@ -72,6 +73,11 @@ func (h socketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Errorf("HTTP SERVER, TCP Write: %v", err.Error())
 		return
 	}
-	log.Infof("Proxying traffic to %v on behalf of %v", remoteTCPConn.RemoteAddr(), wsConn.RemoteAddr())
-	go proxy.Copy(wsConn, remoteTCPConn)
+	go h.handleClient(wsConn, remoteTCPConn)
+}
+
+func (h *socketHandler) handleClient(wsConn *websocket.Conn, remoteTCPConn net.Conn) {
+	log.Infof("Start proxying traffic to %v on behalf of %v", remoteTCPConn.RemoteAddr(), wsConn.RemoteAddr())
+	proxy.Copy(wsConn, remoteTCPConn)
+	log.Infof("End proxying traffic to %v on behalf of %v", remoteTCPConn.RemoteAddr(), wsConn.RemoteAddr())
 }
