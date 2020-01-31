@@ -1,6 +1,7 @@
 package client
 
 import (
+	"crypto/tls"
 	"net"
 	"net/http"
 	"net/url"
@@ -35,6 +36,10 @@ func Start(c *cli.Context) error {
 	query.Set("remote", c.String("remote"))
 	soxyURL.RawQuery = query.Encode()
 	log.Infof("Forwarding for %v", soxyURL)
+
+	if c.Bool("insecure") {
+		websocket.DefaultDialer.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
 
 	for {
 		// Listen for an incoming connection.
