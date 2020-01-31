@@ -142,8 +142,10 @@ OPTIONS:
                                Example: :3306 or 0.0.0.0:3306
    --remote value, -R value    Where should the daemon proxy traffic to?
                                Example: mysql-service:3306
-   --help, -h                  show help (default: false)   
-
+   --api-key value, -k value   API Key to authenticate proxy
+                               Example: myverysecretkey
+   --insecure                  Allow insecure server connections when using TLS (default: false)
+   --help, -h                  show help (default: false)
 
 # soxy serve -h
 NAME:
@@ -153,7 +155,9 @@ USAGE:
    soxy serve [command options] [arguments...]
 
 OPTIONS:
-   --port value, -p value  
-   --help, -h              show help (default: false)
-
+   --port value, -p value     Which local port to listen on.
+                              Example: :3306 or 0.0.0.0:3306
+   --api-key value, -k value  API Key to authenticate clients
+                              Example: myverysecretkey
+   --help, -h                 show help (default: false)
 ```
