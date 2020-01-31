@@ -2,6 +2,7 @@ package client
 
 import (
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 
@@ -43,7 +44,13 @@ func Start(c *cli.Context) error {
 			return err
 		}
 
-		clientWsConn, _, err := websocket.DefaultDialer.Dial(soxyURL.String(), nil)
+		headers := make(http.Header)
+		apiKey := c.String("api-key")
+		if apiKey != "" {
+			headers.Set("X-Api-Key", apiKey)
+		}
+
+		clientWsConn, _, err := websocket.DefaultDialer.Dial(soxyURL.String(), headers)
 		if err != nil {
 			log.Errorf("DIALER: %v", err.Error())
 			return err
