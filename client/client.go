@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
@@ -15,15 +14,6 @@ import (
 
 // Start starts a soxy client
 func Start(c *cli.Context) error {
-
-	l, err := net.Listen("tcp", c.String("local"))
-	if err != nil {
-		log.Errorf("TCP LISTENER: %v", err.Error())
-		os.Exit(1)
-	}
-	// Close the listener when the application closes.
-	defer l.Close()
-	log.Infof("Listening on %v", c.String("local"))
 
 	// Otains the websocket URL
 	soxyURL, err := url.Parse(c.String("soxy-url"))
@@ -35,11 +25,27 @@ func Start(c *cli.Context) error {
 	query := soxyURL.Query()
 	query.Set("remote", c.String("remote"))
 	soxyURL.RawQuery = query.Encode()
-	log.Infof("Forwarding for %v", soxyURL)
+	remote := soxyURL.String()
+
+	headers := make(http.Header)
+	apiKey := c.String("api-key")
+	if apiKey != "" {
+		headers.Set("X-Api-Key", c.String("api-key"))
+	}
 
 	if c.Bool("insecure") {
 		websocket.DefaultDialer.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
+
+	local := c.String("local")
+	l, err := net.Listen("tcp", local)
+	if err != nil {
+		log.Errorf("TCP LISTENER: %v", err.Error())
+		return err
+	}
+	// Close the listener when the application closes.
+	defer l.Close()
+	log.Infof("Listening on %v", local)
 
 	for {
 		// Listen for an incoming connection.
@@ -49,21 +55,23 @@ func Start(c *cli.Context) error {
 			return err
 		}
 
-		headers := make(http.Header)
-		apiKey := c.String("api-key")
-		if apiKey != "" {
-			headers.Set("X-Api-Key", apiKey)
-		}
-
-		clientWsConn, _, err := websocket.DefaultDialer.Dial(soxyURL.String(), headers)
-		if err != nil {
-			log.Errorf("DIALER: %v", err.Error())
-			return err
-		}
 		// Handle connections in a new goroutine.
-		log.Infof("Proxying traffic to %v via %v for %v", c.String("remote"), clientWsConn.RemoteAddr(), tcpConn.RemoteAddr())
-		go proxy.Copy(clientWsConn, tcpConn)
-
+		go handleClient(tcpConn, remote, headers)
 	}
+
+}
+
+func handleClient(tcpConn net.Conn, remote string, headers http.Header) {
+
+	log.Infof("Dialing server %v", remote)
+	clientWsConn, _, err := websocket.DefaultDialer.Dial(remote, headers)
+	if err != nil {
+		log.Errorf("DIALER: %v", err.Error())
+		tcpConn.Close()
+		return
+	}
+	log.Infof("Start proxying traffic to %v via %v for %v", remote, clientWsConn.RemoteAddr(), tcpConn.RemoteAddr())
+	proxy.Copy(clientWsConn, tcpConn)
+	log.Infof("End proxying traffic to %v via %v for %v", remote, clientWsConn.RemoteAddr(), tcpConn.RemoteAddr())
 
 }
